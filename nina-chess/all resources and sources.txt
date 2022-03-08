@@ -1,0 +1,14 @@
+https://essays.jwatzman.org/essays/chess-move-generation-with-magic-bitboards.html - super cool explanation on magic bitboards    
+
+magic numbers blatantly stolen from andy grant's ethereal 
+
+the way of initializing the magic boards is very inspired by ethereal (as these numbers are designed to work this way) after making sure I understand everything that has happened
+
+the idea to pack moves in 16 bits I first spotted in stockfish, it's pretty straightforward but it's not mine
+
+I can pretend I would've encoded castling as "king takes rook" without outside intervention (as it makes perfect sense given my implementation, to easily check whether the castling is kingside or queenside and where return the king/rook to), however I knew stockfish does it that way before I even started working on this and so maybe I was influenced by that
+
+maximum number of moves taken from https://www.chessprogramming.org/Encoding_Moves#MoveIndex and increased to 256 for a nice power of 2
+
+
+rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBRR w KQkq - 0 1
