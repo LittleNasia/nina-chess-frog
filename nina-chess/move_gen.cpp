@@ -258,7 +258,6 @@ int generate_pseudolegal_moves(move_list_container& move_list, const board& b)
 
 void generate_pseudolegal_moves_bitmasks(move_list_container& move_list, const board& b)
 {
-	std::memset(move_list.pseudolegal_move_masks, 0, sizeof(move_list.pseudolegal_move_masks));
 	const color side_to_move = b.get_side_to_move();
 	const color opposite_color = opposite_side_lookup[side_to_move];
 
@@ -401,7 +400,7 @@ int generate_legal_moves(move_list_container& move_list, board& b)
 	{
 		// make the move, see if it's legal, if it is then copy it otherwise not 
 		move curr_pseudo_move = move_list.moves[pseudo_move_index];
-		board copy = b;
+		//board copy = b;
 		b.make_move(curr_pseudo_move);
 		/*if (!b.check_board())
 		{

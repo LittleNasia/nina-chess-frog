@@ -361,3 +361,10 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/nina-chess/chess - Copy.nnue
+/nina-chess/chess - Copy (3).nnue
+/nina-chess/valdata.bin
+/nina-chess/train_chess.bat
+/nina-chess/nina-chess.exe
+/nina-chess/games.bin
+/nina-chess/dev.exe

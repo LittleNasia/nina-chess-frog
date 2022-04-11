@@ -1,10 +1,14 @@
 #include "accumulator.h"
 
-alignas(64) float nn::accumulator::weights[COLOR_NONE][PIECE_NONE][COLOR_NONE][num_board_squares][layer_size][times_input_repeated];
+#if use_nn
+
+alignas(64) float nn::accumulator::weights[PIECE_NONE][COLOR_NONE][num_board_squares][layer_size];
 alignas(64) float nn::accumulator::biases[layer_size];
-alignas(64) float nn::accumulator::en_passant_weights[COLOR_NONE][num_en_passant_squares][layer_size][times_input_repeated];
-alignas(64) float nn::accumulator::castling_weights[COLOR_NONE][4][layer_size][times_input_repeated];
-alignas(64) float nn::accumulator::side_to_move_weights[COLOR_NONE][layer_size][times_input_repeated];
+alignas(64) float nn::accumulator::castling_weights[4][layer_size];
+
+
+static constexpr color own_pieces = WHITE;
+static constexpr color opposite_pieces = BLACK;
 
 
 void nn::accumulator::read_weights(float weights_from_file[][layer_size], float biases_from_file[layer_size])
@@ -14,52 +18,27 @@ void nn::accumulator::read_weights(float weights_from_file[][layer_size], float 
 	{
 		weights_read = true;
 		
-			for (int output_neuron = 0; output_neuron < layer_size; output_neuron++)
+		for (int output_neuron = 0; output_neuron < layer_size; output_neuron++)
+		{
+			int curr_input_index = 0;
+			for (int current_color = 0; current_color < COLOR_NONE; current_color++)
 			{
-				int curr_input_index = 0;
-				for (int perspective = 0; perspective < COLOR_NONE; perspective++)
+				for (int current_piece = 0; current_piece < PIECE_NONE; current_piece++)
 				{
-					for (int current_piece = 0; current_piece < PIECE_NONE; current_piece++)
+					for (int current_square = 0; current_square < num_board_squares; current_square++)
 					{
-						for (int current_color = 0; current_color < COLOR_NONE; current_color++)
-						{
-							for (int current_square = 0; current_square < num_board_squares; current_square++)
-							{
-								for (int repetition = 0; repetition < nn::times_input_repeated; repetition++)
-								{
-									weights[perspective][current_piece][current_color][current_square][output_neuron][repetition]
-										= weights_from_file[curr_input_index++][output_neuron];
-									
-								}
-
-								//std::cout << weights_from_file[curr_input_index++][output_neuron] << "\n";
-							}
-						}
-					}
-					for (int repetition = 0; repetition < nn::times_input_repeated; repetition++)
-					{
-						side_to_move_weights[perspective][output_neuron][repetition] = weights_from_file[curr_input_index++][output_neuron];
-					}
-					for (int ep_square = 0; ep_square < num_en_passant_squares; ep_square++)
-					{
-						for (int repetition = 0; repetition < nn::times_input_repeated; repetition++)
-						{
-							en_passant_weights[perspective][ep_square][output_neuron][repetition] = weights_from_file[curr_input_index++][output_neuron];
-						}
-					}
-
-					for (int curr_castling = 0; curr_castling < 4; curr_castling++)
-					{
-						for (int repetition = 0; repetition < nn::times_input_repeated; repetition++)
-						{
-							castling_weights[perspective][curr_castling][output_neuron][repetition] = weights_from_file[curr_input_index++][output_neuron];
-						}
+						weights[current_piece][current_color][current_square][output_neuron]
+								= weights_from_file[curr_input_index++][output_neuron];
+						//std::cout << weights_from_file[curr_input_index++][output_neuron] << "\n";
 					}
 				}
 			}
-			
-		
-		
+
+			for (int curr_castling = 0; curr_castling < 4; curr_castling++)
+			{
+				castling_weights[curr_castling][output_neuron] = weights_from_file[curr_input_index++][output_neuron];
+			}
+		}
 		std::memcpy(biases, biases_from_file, sizeof(biases));
 	}
 }
@@ -69,62 +48,98 @@ void nn::accumulator::apply_move(move m, piece moving_piece, piece captured_piec
 
 {
 	accumulated_castling_rights = previous_state.accumulated_castling_rights;
-	accumulated_en_passant_square = previous_state.accumulated_en_passant_square;
-	accumulated_side_to_move = previous_state.accumulated_side_to_move;
+	//accumulated_en_passant_square = previous_state.accumulated_en_passant_square;
+	//accumulated_side_to_move = previous_state.accumulated_side_to_move;
+
+	// opposite side is the side that made the move
+	const color side_that_moved = opposite_side_lookup[side_to_move];
+	const color opposite_side = side_to_move;
+
+
+
 	int square_from = move_from(m);
 	int square_to = move_to(m);
 	int flag = move_flag(m);
+	int mirrored_from = horizontal_symmetry_lookup[square_from];
+	int mirrored_to = horizontal_symmetry_lookup[square_to];
+
+	// black's figures are flipped horizontally in the input 
+	// black king on e8 is identical to white king on e1
+	// and so from black's perspective their e8 king "is" on e1
+	// meanwhile white's e1 king "is" on e8
+	// for white everything works as it should
+	// that means depending on who was the side that made the move,
+	// their squares_from and squares_to are mirrored
+	int moving_side_square_to   = ((side_that_moved == WHITE) ? square_to : mirrored_to);
+	int moving_side_square_from = ((side_that_moved == WHITE) ? square_from : mirrored_from);
+
+	int opposite_side_square_to   = ((side_that_moved != WHITE) ? square_to : mirrored_to);
+	int opposite_side_square_from = ((side_that_moved != WHITE) ? square_from : mirrored_from);
 
 	// castling isn't handled as king moves require full refresh
 	for (int output_neuron = 0; output_neuron < layer_size; output_neuron++)
 	{
 		output[WHITE][output_neuron] = previous_state.output[WHITE][output_neuron];
 		output[BLACK][output_neuron] = previous_state.output[BLACK][output_neuron];
-		color piece_color = get_color_from_piece(moving_piece);
-		piece_type type = get_piece_type_from_piece(moving_piece);
+
+		piece_type moving_piece_type = get_piece_type_from_piece(moving_piece);
+		color moving_piece_color = get_color_from_piece(moving_piece);
 		if (m == null_move)
 		{
 			continue;
 		}
 
 		// remove the piece's features from square_from
-		for (int repetition = 0; repetition < nn::times_input_repeated; repetition++)
+
+		// side that moved "lost" their piece from square_from
+		output[side_that_moved][output_neuron] -= 
+			weights[moving_piece_type][own_pieces][moving_side_square_from][output_neuron];
+		// from the opposite perspective it was the opponent who "lost" the piece
+		output[opposite_side][output_neuron] -=
+			weights[moving_piece_type][opposite_pieces][opposite_side_square_from][output_neuron];
+
+		// add the features in destination, possibly promoted
+		if (flag != promotion)
 		{
-			output[WHITE][output_neuron] -= weights[WHITE][type][piece_color][square_from][output_neuron][repetition];
-			output[BLACK][output_neuron] -= weights[BLACK][type][piece_color][square_from][output_neuron][repetition];
-			// add the features in destination, possibly promoted
-			if (flag != promotion)
-			{
-				output[WHITE][output_neuron] += weights[WHITE][type][piece_color][square_to][output_neuron][repetition];
-				output[BLACK][output_neuron] += weights[BLACK][type][piece_color][square_to][output_neuron][repetition];
-			}
-			else
-			{
-				piece_type piece_promoted_to = piece_from_promotion_piece[move_promotion_piece(m)];
-				output[WHITE][output_neuron] += weights[WHITE][piece_promoted_to][piece_color][square_to][output_neuron][repetition];
-				output[BLACK][output_neuron] += weights[BLACK][piece_promoted_to][piece_color][square_to][output_neuron][repetition];
-			}
+			// for side that moved, they "gain" their own piece in the square_to
+			output[side_that_moved][output_neuron] += 
+				weights[moving_piece_type][own_pieces][moving_side_square_to][output_neuron];
+			// likewise, for the opponent it was the opponent who gained a piece
+			output[opposite_side][output_neuron] +=
+				weights[moving_piece_type][opposite_pieces][opposite_side_square_to][output_neuron];
 		}
+		else
+		{
+			piece_type piece_promoted_to = piece_from_promotion_piece[move_promotion_piece(m)];
+
+			output[side_that_moved][output_neuron] += 
+				weights[piece_promoted_to][own_pieces][moving_side_square_to][output_neuron];
+			output[opposite_side][output_neuron] +=
+				weights[piece_promoted_to][opposite_pieces][opposite_side_square_to][output_neuron];
+		}
+		
 
 		// if we captured something, remove its features
 		if (captured_piece != COLOR_PIECE_NONE)
 		{
-			int captured_piece_index = square_to;
+			int moving_side_captured_index   = moving_side_square_to;
+			int opposite_side_captured_index = opposite_side_square_to;
+
 			int captured_piece_type = get_piece_type_from_piece(captured_piece);
-			int captued_piece_color = get_color_from_piece(captured_piece);
+			int captured_piece_color = get_color_from_piece(captured_piece);
+
 			if (flag == en_passant)
 			{
-				captured_piece_index += pawn_push_offset[opposite_side_lookup[piece_color]];
+				moving_side_captured_index   += pawn_push_offset[opposite_side];
+				opposite_side_captured_index += pawn_push_offset[side_that_moved];
 			}
-			for (int repetition = 0; repetition < nn::times_input_repeated; repetition++)
-			{
-				output[WHITE][output_neuron] -=
-					weights[WHITE][captured_piece_type][captued_piece_color][captured_piece_index][output_neuron][repetition];
-				output[BLACK][output_neuron] -=
-					weights[BLACK][captured_piece_type][captued_piece_color][captured_piece_index][output_neuron][repetition];
-			}
-		}
+			output[side_that_moved][output_neuron] -=
+				weights[captured_piece_type][opposite_pieces][moving_side_captured_index][output_neuron];
 
+			output[opposite_side][output_neuron] -=
+				weights[captured_piece_type][own_pieces][opposite_side_captured_index][output_neuron];
+				
+		}
 		
 		if (accumulated_castling_rights != castling_rights)
 		{
@@ -133,35 +148,17 @@ void nn::accumulator::apply_move(move m, piece moving_piece, piece captured_piec
 			while (castling_rights_difference)
 			{
 				int castling_index = pop_bit(castling_rights_difference);
-				for (int repetition = 0; repetition < nn::times_input_repeated; repetition++)
-				{
-					output[WHITE][output_neuron] -= castling_weights[WHITE][castling_index][output_neuron][repetition];
-					output[BLACK][output_neuron] -= castling_weights[BLACK][castling_index][output_neuron][repetition];
-				}
+				output[WHITE][output_neuron] -= castling_weights[castling_index][output_neuron];
+
+				static constexpr int black_persp_castling_lookup[4] =
+				{ 2,3,0,1 };
+
+				output[BLACK][output_neuron] -= 
+					castling_weights[black_persp_castling_lookup[castling_index]][output_neuron];
 			}
 			
 		}
-		if (accumulated_en_passant_square != ep_square)
-		{
-			if (accumulated_en_passant_square != no_en_passant)
-			{
-				int ep_square_index = en_passant_index_lookup[accumulated_en_passant_square];
-				for (int repetition = 0; repetition < nn::times_input_repeated; repetition++)
-				{
-					output[WHITE][output_neuron] -= en_passant_weights[WHITE][ep_square_index][output_neuron][repetition];
-					output[BLACK][output_neuron] -= en_passant_weights[BLACK][ep_square_index][output_neuron][repetition];
-				}
-			}
-			if (ep_square != no_en_passant)
-			{
-				int ep_square_index = en_passant_index_lookup[ep_square];
-				for (int repetition = 0; repetition < nn::times_input_repeated; repetition++)
-				{
-					output[WHITE][output_neuron] += en_passant_weights[WHITE][ep_square_index][output_neuron][repetition];
-					output[BLACK][output_neuron] += en_passant_weights[BLACK][ep_square_index][output_neuron][repetition];
-				}
-			}
-		}
+		
 	}
 	accumulated_en_passant_square = ep_square;
 	accumulated_castling_rights = castling_rights;
@@ -174,7 +171,6 @@ void nn::accumulator::refresh_accumulator(const bitboard bitboards[][PIECE_NONE]
 	// get the new config based on the king bitboards
 	bitboard white_kings = bitboards[WHITE][KING];
 	bitboard black_kings = bitboards[BLACK][KING];
-	current_config = calculate_config(pop_bit(white_kings), pop_bit(black_kings));
 	int curr_feature = 0;
 
 	std::memcpy(output[WHITE], biases, sizeof(biases));
@@ -190,11 +186,13 @@ void nn::accumulator::refresh_accumulator(const bitboard bitboards[][PIECE_NONE]
 				int feature_index = pop_bit(curr_bb);
 				for (int output_neuron = 0; output_neuron < layer_size; output_neuron++)
 				{
-					for (int repetition = 0; repetition < times_input_repeated; repetition++)
-					{
-						output[WHITE][output_neuron] += weights[WHITE][pt][c][feature_index][output_neuron][repetition];
-						output[BLACK][output_neuron] += weights[BLACK][pt][c][feature_index][output_neuron][repetition];
-					}
+					const color white_color_perspective = ((c == WHITE) ? own_pieces : opposite_pieces);
+					const color black_color_perspective = ((c == BLACK) ? own_pieces : opposite_pieces);
+
+					const int black_perspective_index = horizontal_symmetry_lookup[feature_index];
+
+					output[WHITE][output_neuron] += weights[pt][white_color_perspective][feature_index][output_neuron];
+					output[BLACK][output_neuron] += weights[pt][black_color_perspective][black_perspective_index][output_neuron];
 				}
 			}
 		}
@@ -207,35 +205,12 @@ void nn::accumulator::refresh_accumulator(const bitboard bitboards[][PIECE_NONE]
 		{
 			for (int output_neuron = 0; output_neuron < layer_size; output_neuron++)
 			{
-				for (int repetition = 0; repetition < times_input_repeated; repetition++)
-				{
-					output[WHITE][output_neuron] += castling_weights[WHITE][castling][output_neuron][repetition];
-					output[BLACK][output_neuron] += castling_weights[BLACK][castling][output_neuron][repetition];
-					
-				}
-			}
-		}
-	}
-	accumulated_side_to_move = side_to_move;
-	for (int output_neuron = 0; output_neuron < layer_size; output_neuron++)
-	{
-		for (int repetition = 0; repetition < times_input_repeated; repetition++)
-		{
-			output[BLACK][output_neuron] += side_to_move_weights[BLACK][output_neuron][repetition];
-		}
-	}
+				output[WHITE][output_neuron] += castling_weights[castling][output_neuron];
+				static constexpr int black_persp_castling_lookup[4] =
+				{ 2,3,0,1 };
 
-
-	if (ep_square != no_en_passant)
-	{
-		int ep_square_index = en_passant_index_lookup[ep_square];
-		for (int output_neuron = 0; output_neuron < layer_size; output_neuron++)
-		{
-			for (int repetition = 0; repetition < times_input_repeated; repetition++)
-			{
-				output[WHITE][output_neuron] += en_passant_weights[WHITE][ep_square_index][output_neuron][repetition];
-				output[BLACK][output_neuron] += en_passant_weights[BLACK][ep_square_index][output_neuron][repetition];
-				
+				output[BLACK][output_neuron] +=
+					castling_weights[black_persp_castling_lookup[castling]][output_neuron];
 			}
 		}
 	}
@@ -275,3 +250,4 @@ void nn::accumulator::refresh(const float* nn_input)
 
 	}*/
 }
+#endif

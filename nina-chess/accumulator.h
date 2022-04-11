@@ -4,7 +4,7 @@
 
 namespace nn
 {
-	class accumulator
+	class alignas(64) accumulator
 	{
 	public:
 		static constexpr int layer_size = layer_sizes[ACCUMULATOR_LAYER];
@@ -34,11 +34,11 @@ namespace nn
 		static constexpr int max_config = 64*64;
 		static constexpr int input_size = 64 * 2 * 6 + 1 + 64 + 4;
 
-		alignas(64) static float weights[COLOR_NONE][PIECE_NONE][COLOR_NONE][num_board_squares][layer_size][times_input_repeated];
+		alignas(64) static float weights[PIECE_NONE][COLOR_NONE][num_board_squares][layer_size];
 		alignas(64) static float biases[layer_size];
-		alignas(64) static float side_to_move_weights[COLOR_NONE][layer_size][times_input_repeated];
-		alignas(64) static float en_passant_weights[COLOR_NONE][num_en_passant_squares][layer_size][times_input_repeated];
-		alignas(64) static float castling_weights[COLOR_NONE][4][layer_size][times_input_repeated];
+		//alignas(64) static float side_to_move_weights[COLOR_NONE][layer_size][times_input_repeated];
+		//alignas(64) static float en_passant_weights[COLOR_NONE][num_en_passant_squares][layer_size][times_input_repeated];
+		alignas(64) static float castling_weights[4][layer_size];
 		
 
 		alignas(64) float output[COLOR_NONE][layer_size];
@@ -46,7 +46,5 @@ namespace nn
 		color accumulated_side_to_move;
 		int accumulated_castling_rights;
 		int accumulated_en_passant_square;
-		
-		int current_config = 0;
-	};
+		};
 }

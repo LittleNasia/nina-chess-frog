@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <intrin.h>
 #include <iostream>
+#include <limits>
 
 using bitboard	= uint64_t;
 using color		= int32_t;
@@ -157,7 +158,7 @@ enum
 
 inline constexpr char promotion_piece_to_char[PROMOTION_NONE] =
 {
-	'n','b','r', 'q'
+	'n','b','r','q'
 };
 
 inline constexpr piece_type piece_from_promotion_piece[PROMOTION_NONE] =
@@ -326,27 +327,27 @@ inline const char* square_names[num_board_squares] =
 	"h8","g8","f8","e8","d8","c8","b8","a8",
 };
 
+inline constexpr int get_col_from_file(const char file)
+{
+	int col = file - 'a';
+	// "h" file is actually column number 0 internally
+	col = board_cols - (col + 1);
+	return col;
+}
+
+inline constexpr int get_row_from_rank(const char rank)
+{
+	return rank - '1';
+}
+
 inline constexpr int square_index_from_square_name(const char* square_name)
 {
-	int row = square_name[1] - '1';
-	int col = square_name[0] - 'a';
-	col = board_cols - (col + 1);
+	int row = get_row_from_rank(square_name[1]);
+	int col = get_col_from_file(square_name[0]);
 	return two_d_to_one_d(row, col);
 }
 
-namespace rng
-{
-	inline thread_local uint64_t rng_state = 0xabcdabcd ^ __rdtsc();
 
-	static uint64_t xorshift64()
-	{
-		uint64_t x = rng_state;
-		x ^= x << 13;
-		x ^= x >> 7;
-		x ^= x << 17;
-		return rng_state = x;
-	}
-}
 
 
 inline constexpr int horizontal_symmetry_lookup[num_board_squares] =

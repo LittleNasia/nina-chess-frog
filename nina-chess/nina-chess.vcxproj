@@ -131,7 +131,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
@@ -142,6 +142,10 @@
       <ExceptionHandling>false</ExceptionHandling>
       <FloatingPointExceptions>false</FloatingPointExceptions>
       <EnableFiberSafeOptimizations>true</EnableFiberSafeOptimizations>
+      <AdditionalOptions>/genprofile %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>./fathom;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <StringPooling>true</StringPooling>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -156,6 +160,7 @@
   <ItemGroup>
     <ClCompile Include="accumulator.cpp" />
     <ClCompile Include="evaluate.cpp" />
+    <ClCompile Include="fathom\tbprobe.cpp" />
     <ClCompile Include="game_generation.cpp" />
     <ClCompile Include="magic.cpp" />
     <ClCompile Include="board.cpp" />
@@ -164,6 +169,8 @@
     <ClCompile Include="nina-chess.cpp" />
     <ClCompile Include="nn.cpp" />
     <ClCompile Include="perft.cpp" />
+    <ClCompile Include="pgn_parser.cpp" />
+    <ClCompile Include="rng.cpp" />
     <ClCompile Include="search.cpp" />
     <ClCompile Include="tt.cpp" />
     <ClCompile Include="uci.cpp" />
@@ -171,6 +178,9 @@
   <ItemGroup>
     <ClInclude Include="dense_layer.h" />
     <ClInclude Include="evaluate.h" />
+    <ClInclude Include="fathom\stdendian.h" />
+    <ClInclude Include="fathom\tbconfig.h" />
+    <ClInclude Include="fathom\tbprobe.h" />
     <ClInclude Include="game_generation.h" />
     <ClInclude Include="magic.h" />
     <ClInclude Include="bitmasks.h" />
@@ -181,6 +191,8 @@
     <ClInclude Include="accumulator.h" />
     <ClInclude Include="nn_utils.h" />
     <ClInclude Include="perft.h" />
+    <ClInclude Include="pgn_parser.h" />
+    <ClInclude Include="rng.h" />
     <ClInclude Include="search.h" />
     <ClInclude Include="tt.h" />
     <ClInclude Include="uci.h" />

@@ -5,7 +5,7 @@
 
 namespace nn
 {
-	template<int in_neurons, int out_neurons>
+	template<int in_neurons, int out_neurons, activation_function func=ACTIVATION_TANH>
 	class dense_layer
 	{
 	public:
@@ -69,8 +69,15 @@ namespace nn
 				// load 4 inputs into one register
 				__m128 curr_input_pack = _mm_load_ps(input + input_neuron);
 				// apply activation function on input first
-				curr_input_pack = _mm_tanh_ps(curr_input_pack);
-				//curr_input_pack = _mm_max_ps(curr_input_pack, _mm_setzero_ps());
+				if (func == ACTIVATION_RELU)
+				{
+					curr_input_pack = _mm_max_ps(curr_input_pack, _mm_setzero_ps());
+				}
+				else if (func == ACTIVATION_TANH)
+				{
+					curr_input_pack = _mm_tanh_ps(curr_input_pack);
+				}
+				
 				// 4 output values are calculated in one iteration 
 				static constexpr int num_output_packs = out_neurons / 4;
 				for (int output_pack = 0, output_neuron = 0; output_pack < num_output_packs; output_pack++, output_neuron += 4)
@@ -131,10 +138,18 @@ namespace nn
 				__m128 second_input_pack = _mm_load_ps(input + input_neuron + 4);
 
 				// apply activation function on input first
-			    first_input_pack = _mm_tanh_ps(first_input_pack);
-				second_input_pack = _mm_tanh_ps(second_input_pack);
-				//first_input_pack = _mm_max_ps(first_input_pack, _mm_setzero_ps());
-				//second_input_pack = _mm_max_ps(second_input_pack, _mm_setzero_ps());
+			    //first_input_pack = _mm_tanh_ps(first_input_pack);
+				//second_input_pack = _mm_tanh_ps(second_input_pack);
+				if (func == ACTIVATION_RELU)
+				{
+					first_input_pack = _mm_max_ps(first_input_pack, _mm_setzero_ps());
+					second_input_pack = _mm_max_ps(second_input_pack, _mm_setzero_ps());
+				}
+				else if (func == ACTIVATION_TANH)
+				{
+					first_input_pack = _mm_tanh_ps(first_input_pack);
+					second_input_pack = _mm_tanh_ps(second_input_pack);
+				}
 
 				// load weights of these packs
 				__m128 first_input_pack_weights = _mm_load_ps((float*)&weights[input_pack][output_neuron]);

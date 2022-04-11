@@ -42,9 +42,6 @@
     <ClCompile Include="tt.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="nn.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="evaluate.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -59,6 +56,18 @@
     </ClCompile>
     <ClCompile Include="move_picker.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="pgn_parser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="fathom\tbprobe.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="rng.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nn.cpp">
+      <Filter>Source Files\NN</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -108,6 +117,21 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="move_picker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="pgn_parser.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="fathom\tbprobe.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="fathom\stdendian.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="fathom\tbconfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="rng.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

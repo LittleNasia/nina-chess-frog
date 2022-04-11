@@ -87,16 +87,26 @@ namespace game_generation
 		return position;
 	}
 	// total number of games is this times number of threads
-	static inline constexpr int games_per_thread = 1500;
+	static inline constexpr int games_per_thread = 2500;
 	// adjudicate as draw if game ever goes this long
 	static inline constexpr int max_game_length = 250;
 	// min value is 0, max value is 255
-	static inline constexpr int random_move_chance = 40;
+	static inline constexpr int random_move_chance = 255;
 	// no more random moves after this many random moves
 	static inline constexpr int max_random_moves = 6;
 	// no more random moves after this ply
-	static inline constexpr int max_random_move_ply = 15;
+	static inline constexpr int max_random_move_ply = 6;
+	// with each move, random move chance is decreased by this amount
+	static inline constexpr int random_move_chance_decay = 0;
+	// random move chance cannot go below this value no matter the ply
+	static inline constexpr int min_random_move_chance = 0;
+	// what piece count is considered "low" by the game generator
+	static inline constexpr int low_piece_count_threshold = 9;
+	// base chance for randomly searching deeper in generation
+	static inline constexpr int tactic_search_chance = 0;
+	// increased chance to look for tactic when there are little pieces
+	static inline constexpr int low_piece_tactic_chance_increase = 0;
 
-	void generate_games(int num_threads);
+	void generate_games(int num_threads, const std::string& filename);
 };
 

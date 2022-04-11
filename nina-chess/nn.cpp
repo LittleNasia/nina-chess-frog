@@ -8,6 +8,7 @@ std::mutex reading_weights_mutex;
 
 namespace nn
 {
+#if use_nn
 float accumulator_weights[input_size][accumulator::layer_size];
 float accumulator_biases[accumulator::layer_size];
 
@@ -81,5 +82,5 @@ float nn::nn_evaluator::evaluate_board(const board& b)
 	return std::tanh(output);
 }
 
-
+#endif
 }

@@ -23,12 +23,11 @@ class one:
 num_layers = 3
 layerTypes = ['d','d','d','d','d']
 layer_types = ['d','d','d','d','d']
-layerSizes = [32, 32, 1]
-layer_sizes = [32, 32, 1]
+layer_sizes = [64,64, 1]
 
 times_input_repeated = 1
              #pieces      #side_to_move   #en_passant_squares   #castling_rights
-input_size = (64 * 2 * 6 + 1 + 16 + 4) * times_input_repeated * 2;
+input_size = (64 * 2 * 6 + 4);
 
 weights_filename = "chess.nnue"
 
@@ -126,18 +125,18 @@ class GCAdam(tf.keras.optimizers.Adam):
 
 model = tf.keras.Sequential()
 model.add(tf.keras.layers.Input(shape=(input_size), sparse = True))
-model.add(tf.keras.layers.Dense(layerSizes[0], activation = 'tanh'))
-model.add(keras.layers.Dropout(0.1))
-model.add(tf.keras.layers.Dense(layerSizes[1], activation = 'tanh'))
-model.add(keras.layers.Dropout(0.1))
+model.add(tf.keras.layers.Dense(layer_sizes[0], activation = 'relu'))
+#model.add(keras.layers.Dropout(1/2))
+model.add(tf.keras.layers.Dense(layer_sizes[1], activation = 'tanh'))
+#model.add(keras.layers.Dropout(1/32))
 #model.add(tf.keras.layers.Dense(layerSizes[2], activation = 'relu'))
 #model.add(keras.layers.Dropout(0.03))
-model.add(tf.keras.layers.Dense(layerSizes[2], activation = 'tanh'))
+model.add(tf.keras.layers.Dense(layer_sizes[-1], activation = 'tanh'))
 
-initial_learning_rate = 0.00002
+initial_learning_rate = 0.0002
 lr = initial_learning_rate
 opt = GCAdam(learning_rate=lr)
-model.compile(optimizer="adam", loss='mean_squared_error')
+model.compile(optimizer=opt, loss='mean_squared_error')
 load_weights(model)
 
 
@@ -175,51 +174,69 @@ prev_loss = 100000000
 current_file = 0
 attempts = 0
 generation = 0;
+lr_drops = 0
+loss_sample_size = 1
+batch_size_multipliers = [1,128]
+curr_batch_size_multiplier = batch_size_multipliers[0]
+epoch = 0
+#subprocess.call("nina-chess.exe")
 while(True):
-        save_weights(model)
-        #subprocess.call("nina-chess.exe")
+        #save_weights(model)
+        
+        gc.collect()
+        curr_loss = 0
+        loss_sample_size = 0
+        while True:
+            games = chess_games.get_games()
+            if(games is None):
+                break
+            loss_sample_size +=1
+            x_val_raw,y_val = games
+            np_ones = tf.ones((x_val_raw.shape[0]))
+            x_val = tf.SparseTensor(x_val_raw,np_ones,(x_val_raw[-1,0]+1,input_size))
+            x_pred = model.predict(tf.sparse.slice(x_val,[0,0],[100,input_size]))
+            for i in range(100):
+                    print(x_pred[i], y_val[i])
+            curr_loss += model.evaluate(x_val, y_val,batch_size = 256 * 1)
+        curr_loss /=loss_sample_size
+        
+            
+        del x_val_raw
+        del x_val
+        del y_val
         gc.collect()
         
-        if( False and (prev_loss > curr_loss)):
+        if((prev_loss > curr_loss)):
             print("new best loss", curr_loss)
-            prev_loss = curr_loss#
+            prev_loss = curr_loss
             save_weights(model)
-        elif False:
-            print("did great, lowering learning rate")
-            lr *= 0.1
-            opt.learning_rate.assign(lr)
-            attempts +=1
-            if(attempts ==1):
-                print("ended")
-                attempts = 0
-                prev_loss = 10000000
-                opt.learning_rate.assign(initial_learning_rate)
-                lr = initial_learning_rate
-                subprocess.call("nina-chess.exe")
-                
-        #del x_val
-        #del y_val
+        else:
+            print("did great, lowering learning rate", curr_loss, prev_loss)
+            load_weights(model)
+            if(curr_batch_size_multiplier == batch_size_multipliers[0]):
+                curr_batch_size_multiplier = batch_size_multipliers[-1]
+            else:
+                curr_batch_size_multiplier = batch_size_multipliers[0]
+                lr *= 0.1
+                opt.learning_rate.assign(lr)
+                attempts +=1
+                if(attempts ==2):
+                    print("ended")
+                    exit(0)
+                    attempts = 0
+                    prev_loss = 10000000
+                    opt.learning_rate.assign(initial_learning_rate)
+                    lr = initial_learning_rate
+                    epoch = 0
+                    #os.remove("games.bin")
+                    #os.remove("valdata.bin")
+                    #subprocess.call("nina-chess.exe")
         gc.collect()
         index = 0
-        for epoch in range(3):
-            
-            #x_val_raw,y_val = chess_games.get_games()
-           # np_ones = tf.ones((x_val_raw.shape[0]))
-            #x_val = tf.SparseTensor(x_val_raw,np_ones,(x_val_raw[-1,0]+1,input_size))
-            #curr_loss = model.evaluate(x_val, y_val,batch_size = 256 * 16)
-            #x_pred = model.predict(tf.sparse.slice(x_val,[0,0],[100,input_size]))
-            #for i in range(100):
-            #            print(x_pred[i], y_val[i])
-            #del x_val_raw
-            #del x_val
-            ##del y_val
-            #del x_pred
-            #gc.collect()
-            
-            while(True):
+        while(True):
                 print("\nattempt nr",attempts," epoch nr",epoch,"\n")
                 games = chess_games.get_games()
-                if(games == None):
+                if(games is None):
                     current_file+=1
                     if(current_file >=num_files):
                         #subprocess.call("nina-chess.exe")
@@ -230,15 +247,25 @@ while(True):
                 np_ones = tf.ones((x_raw.shape[0]))
                 x = tf.SparseTensor(x_raw,np_ones,(x_raw[-1,0]+1,input_size))
                 model.fit(x,y, epochs = 1
-                      ,shuffle=False,batch_size = 256 * 16, verbose = 1)
+                      ,shuffle=True,batch_size = 256 * curr_batch_size_multiplier, verbose = 1)
                 del x
                 del y
                 del x_raw
                 del games
                 index+=0
                 gc.collect()
-        save_weights(model)
-        subprocess.call("nina-chess.exe")
+        epoch +=1
+            #save_weights(model)
+        #lr *= 0.1
+        #opt.learning_rate.assign(lr)
+        #lr_drops+=1
+        #if(lr_drops >= 3):
+        #    subprocess.call("nina-chess.exe")
+        #    lr_drops = 0
+         #   lr = initial_learning_rate
+         #   opt.learning_rate.assign(lr)
+        
+        #
 
 
 

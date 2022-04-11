@@ -5,6 +5,7 @@
 #include "game_generation.h"
 
 #include <sstream>
+#include <random>
 
 constexpr uint8_t startpos_board_array[num_board_squares] = {
 	4, 8, 6, 0, 2, 6, 8, 4, 10, 10, 10, 10, 10, 10, 10, 10, 12, 12,
@@ -117,7 +118,7 @@ bool board::is_drawn() const
 		}
 	}
 	// check 50mr
-	if (fifty_rule == 100)
+	if (fifty_rule >= 100)
 	{
 		return true;
 	}
@@ -301,7 +302,9 @@ void board::set_position(const std::string& fen)
 	//std::cout << ply << "\n";
 
 	//prepare_input();
+#if use_nn
 	acc_history[ply].refresh_accumulator(bitboards, en_passant_square, castling_rights, side_to_move);
+#endif
 }
 
 void board::set_position(const position_entry& entry)
@@ -564,6 +567,10 @@ void board::prepare_input()
 
 inline constexpr void board::flip_piece(int square, color c, piece_type p)
 {
+	if (p == PIECE_NONE)
+	{
+		std::cout << "wha2t\n";
+	}
 	// get the bitboards of the captured piece type and remove it 
 	bitboards[c][p] ^= (1ULL << square);
 	color_bitboards[c] ^= (1ULL << square);
@@ -593,8 +600,10 @@ void board::make_move(move m)
 		// we skip the "moving the piece" part
 		ply++;
 		side_to_move = opposite_side_lookup[side_to_move];
+#if use_nn
 		acc_history[ply].apply_move(m, COLOR_PIECE_NONE, COLOR_PIECE_NONE,
 			-1, side_to_move, castling_rights, acc_history[ply - 1]);
+#endif
 		calculate_hash();
 		return;
 	}
@@ -981,7 +990,7 @@ void board::undo_move()
 
 }
 
-void board::randomize_position()
+void board::randomize_position(const bool imbalance)
 {
 	// reset the current board
 	std::memset(bitboards, 0, sizeof(bitboards));
@@ -1026,7 +1035,7 @@ void board::randomize_position()
 	};
 
 	// there can be either 2 or 3 rows of pieces generated in a game
-	bool generating_third_row = rng::xorshift64() & 1;
+	bool generating_third_row = prng() & 1;
 
 	for (const auto square_name : remaining_squares)
 	{
@@ -1054,18 +1063,98 @@ void board::randomize_position()
 		}
 		else
 		{
-			// king piece type is 0, get a piece that is not a king
-			generated_piece_type = (piece_type)(rng::xorshift64() % (PIECE_NONE - 1) + 1);
+			// queen piece has the lowest piece value, pawn has the highest
+			// this will generate all possible pieces except for the king
+			static const std::uniform_int_distribution<int> piece_dist(QUEEN, PAWN);
+			generated_piece_type = (piece_type)piece_dist(prng);
+
+			// tablebases don't tolerate pawns on first row 
+			// boriiiing
+			if (!white_index_row)
+			{
+				while (generated_piece_type == PAWN)
+				{
+					generated_piece_type = (piece_type)piece_dist(prng);
+				}
+			}
 		}
 		
-		flip_piece(white_index, WHITE, generated_piece_type);
-		flip_piece(black_index, BLACK, generated_piece_type);
-		board_array[white_index] = get_piece_from_piece_type(generated_piece_type, WHITE);
-		board_array[black_index] = get_piece_from_piece_type(generated_piece_type, BLACK);
+
+		// we sometimes might want some imbalance in positions
+		if (imbalance && prng.random_roll(pos_generation_imbalance_chance))
+		{
+			// modified side is the side that has a different piece
+			// in place of the current piece
+			const color modified_side = prng.random_color();
+			const color unchanged_side = opposite_side_lookup[modified_side];
+			const int& modified_side_index = ((modified_side == WHITE) ? white_index : black_index);
+			const int& unchanged_side_index = ((modified_side != WHITE) ? white_index : black_index);
+
+			piece_type replacement_piece_type;
+
+
+			static constexpr int num_piece_replacements = 2;
+			static constexpr piece_type piece_replacements[PIECE_NONE][num_piece_replacements] =
+			{
+				// king replacements, shouldn't happen
+				{PIECE_NONE,PIECE_NONE},
+				// queens can't be replaced
+				{QUEEN, QUEEN},
+				// rooks can rarely be replaced with itself or bishops
+				{ROOK, BISHOP},
+				// bishops can be changed into a rook or a knight sometimes
+				{ROOK, KNIGHT},
+				// knights can be replaced with bishops or pawns
+				{BISHOP, PAWN},
+				// pawns are special as they can also be removed
+				{KNIGHT, PIECE_NONE}
+			};
+			
+			static const std::uniform_int_distribution<int> piece_index_choice(0, num_piece_replacements-1);
+			replacement_piece_type = piece_replacements[generated_piece_type][piece_index_choice(prng)];
+
+			if (generated_piece_type == KING)
+			{
+				std::cout << "wutface\n";
+			}
+			if (replacement_piece_type == KING)
+			{
+				std::cout << "ee?\n";
+			}
+
+			// put the unchanged piece in place
+			flip_piece(unchanged_side_index, unchanged_side, generated_piece_type);
+			board_array[unchanged_side_index] = get_piece_from_piece_type(generated_piece_type, unchanged_side);
+
+			// it's possible for a knight on first row to become a pawn
+			// make sure it doesn't happen due to tablebase thingies
+			if (!white_index_row && (replacement_piece_type == PAWN))
+			{
+				replacement_piece_type = generated_piece_type;
+			}
+
+			// normally, flipping pieces of type PIECE_NONE will never happen
+			// as such, flip_piece doesn't check for that condition as it's pointless
+			// here however we *might* get such occurence, and so it's dealt with here
+			if (replacement_piece_type < PIECE_NONE)
+			{
+				flip_piece(modified_side_index, modified_side, replacement_piece_type);
+				board_array[modified_side_index] = get_piece_from_piece_type(replacement_piece_type, modified_side);
+			}
+		}
+		else
+		{
+			// we continue as normal
+			flip_piece(white_index, WHITE, generated_piece_type);
+			flip_piece(black_index, BLACK, generated_piece_type);
+			board_array[white_index] = get_piece_from_piece_type(generated_piece_type, WHITE);
+			board_array[black_index] = get_piece_from_piece_type(generated_piece_type, BLACK);
+		}
+		
 	}
 
 	// get random castling rights for both sides
-	int random_castling = rng::xorshift64() & 3;
+	int random_castling = prng() & 3;
 
 	castling_rights = random_castling | (random_castling << 2);
 	en_passant_square = no_en_passant;
@@ -1118,7 +1207,9 @@ void board::new_game()
 	occupied = 18446462598732906495ULL;
 
 	calculate_hash();
+#if use_nn
 	acc_history[ply].refresh_accumulator(bitboards, en_passant_square, castling_rights, side_to_move);
+#endif
 }
 
 void board::init_zoribst()
@@ -1126,6 +1217,7 @@ void board::init_zoribst()
 	static bool zoribst_initialized = false;
 	if (!zoribst_initialized)
 	{
+		static rng zoribst_rng;
 		zoribst_initialized = true;
 		for (int curr_color = 0; curr_color < COLOR_NONE; curr_color++)
 		{
@@ -1133,19 +1225,19 @@ void board::init_zoribst()
 			{
 				for (int square = 0; square < num_board_squares; square++)
 				{
-					zoribst_values[curr_color][curr_piece_type][square] = rng::xorshift64();
+					zoribst_values[curr_color][curr_piece_type][square] = zoribst_rng();
 				}
 			}
 		}
 		for (auto& val : zoribst_castling)
 		{
-			val = rng::xorshift64();
+			val = zoribst_rng();
 		}
 		for (auto& val : zoribst_en_passant)
 		{
-			val = rng::xorshift64();
+			val = zoribst_rng();
 		}
-		zoribst_side_to_move = rng::xorshift64();
+		zoribst_side_to_move = zoribst_rng();
 	}
 }
 

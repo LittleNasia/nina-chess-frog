@@ -74,6 +74,7 @@ void initialize_sliding_magics(const point* move_offsets, bitboard* attacks_tabl
 
         // the magic numbers are taken from Andy Grant's Ethereal
         // I trust him they work 
+        // which they dooooooo
         uint64_t magic_num = magic_numbers[square];
 
         // get all attacked squares, cut the edges for the reasons explained before

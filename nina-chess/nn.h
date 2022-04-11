@@ -7,12 +7,14 @@
 namespace nn
 {
 	
+
+#if use_nn
 	class nn_evaluator
 	{
 	public:
 
-		using first_layer_type = dense_layer<accumulator::layer_size, layer_sizes[FIRST_LAYER]>;
-		using output_layer_type = dense_layer<layer_sizes[FIRST_LAYER], layer_sizes[OUTPUT_LAYER]>;
+		using first_layer_type = dense_layer<accumulator::layer_size, layer_sizes[FIRST_LAYER], activation_functions[FIRST_LAYER]>;
+		using output_layer_type = dense_layer<accumulator::layer_size, layer_sizes[OUTPUT_LAYER], activation_functions[OUTPUT_LAYER]>;
 		
 		nn_evaluator(const std::string& filename);
 
@@ -27,6 +29,7 @@ namespace nn
 	};
 
 	inline thread_local nn_evaluator network("chess.nnue");
+#endif
 }
 
 

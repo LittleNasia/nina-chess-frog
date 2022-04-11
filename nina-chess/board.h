@@ -1,7 +1,8 @@
 #pragma once
-#include "utils.h"
-#include "accumulator.h"
 
+#include "accumulator.h"
+#include "rng.h"
+#include "utils.h"
 
 struct position_entry;
 
@@ -25,6 +26,8 @@ struct move_info
 class board
 {
 public:
+	// max value is 255, min value is 0
+	static constexpr int pos_generation_imbalance_chance = 10;
 	board();
 	void print_board();
 	void make_move(move m);
@@ -41,7 +44,7 @@ public:
 	bool in_check() const;
 
 
-	void randomize_position();
+	void randomize_position(const bool imbalance = false);
 
 
 	// does a few simple checks if a move is legal
@@ -58,8 +61,9 @@ public:
 	int get_pieces_count(color c) { return popcnt(color_bitboards[c] ^ bitboards[c][PAWN]) - 1; }
 
 	
-
+#if use_nn
 	const nn::accumulator& get_current_accumulator() const { return acc_history[ply]; }
+#endif
 	uint64_t get_hash() const { return hash; }
 	int get_ply() const { return ply; }
 	bool is_capture(move m) const { return board_array[move_to(m)] != COLOR_PIECE_NONE; }
@@ -93,6 +97,7 @@ private:
 	int ply;
 	int fifty_rule;
 	bool is_frc;
+	rng prng;
 
 	// board array for fast lookup of pieces on square
 	piece board_array[board_rows * board_cols];
